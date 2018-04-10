@@ -145,7 +145,6 @@ module Mongoid #:nodoc
 
       def connection
         # ActiveRecord::Base.connection
-        client_name = ENV["MONGOID_MIGRATIONS_CLIENT"] || "default"
         client = ::Mongoid.Clients.with_name(client_name)
         if client
           client
@@ -232,9 +231,10 @@ module Mongoid #:nodoc
       # end
 
       def get_all_versions
-        # table = Arel::Table.new(schema_migrations_table_name)
-        #         Base.connection.select_values(table.project(table['version']).to_sql).map(&:to_i).sort
-        DataMigration.all.map { |datamigration| datamigration.version.to_i }.sort
+        ::Mongoid.override_database(ENV["MONGOID_MIGRATIONS_DB"]) if ENV["MONGOID_MIGRATIONS_DB"]
+        data_migrations = DataMigration.all.map { |datamigration| datamigration.version.to_i }.sort
+        ::Mongoid.override_database(nil) if ENV["MONGOID_MIGRATIONS_DB"]
+        data_migrations
       end
 
       def current_version
@@ -282,6 +282,7 @@ module Mongoid #:nodoc
     end
 
     def run
+      puts "run"
       target = migrations.detect { |m| m.version == @target_version }
       raise UnknownMigrationVersionError.new(@target_version) if target.nil?
       unless (up? && migrated.include?(target.version.to_i)) || (down? && !migrated.include?(target.version.to_i))
@@ -379,7 +380,7 @@ module Mongoid #:nodoc
     private
       def record_version_state_after_migrating(version)
         # table = Arel::Table.new(self.class.schema_migrations_table_name)
-
+        ::Mongoid.override_database(ENV["MONGOID_MIGRATIONS_DB"]) if ENV["MONGOID_MIGRATIONS_DB"]
         @migrated_versions ||= []
         # if down?
         #   @migrated_versions.delete(version)
@@ -388,13 +389,16 @@ module Mongoid #:nodoc
         #   @migrated_versions.push(version).sort!
         #   table.insert table["version"] => version.to_s
         # end
+        result = nil
         if down?
           @migrated_versions.delete(version)
-          DataMigration.where(:version => version.to_s).first.destroy
+          result = DataMigration.where(:version => version.to_s).first.destroy
         else
           @migrated_versions.push(version).sort!
-          DataMigration.create(:version => version.to_s)
+          result = DataMigration.create(:version => version.to_s)
         end
+        ::Mongoid.override_database(nil) if ENV["MONGOID_MIGRATIONS_DB"]
+        result
       end
 
       def up?
