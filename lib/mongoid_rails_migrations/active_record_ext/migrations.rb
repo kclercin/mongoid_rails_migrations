@@ -145,7 +145,7 @@ module Mongoid #:nodoc
 
       def connection
         # ActiveRecord::Base.connection
-        client_name = ENV["MONGOID_MIGRATIONS_DB"] || "default"
+        client_name = ENV["MONGOID_MIGRATIONS_CLIENT"] || "default"
         client = ::Mongoid.Clients.with_name(client_name)
         if client
           client
